@@ -16,13 +16,14 @@ from tqdm import tqdm
 import provider
 import numpy as np
 import time
+from data_utils.pcdDataLoader import HierarchicalPointCloudDataset
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ['ceiling', 'floor', 'wall', 'beam', 'column', 'window', 'door', 'table', 'chair', 'sofa', 'bookcase',
-           'board', 'clutter']
+classes = ['scanned','box']
+numb_of_classes: int = len(classes)
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
 seg_label_to_cat = {}
@@ -37,7 +38,7 @@ def inplace_relu(m):
 def parse_args():
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--model', type=str, default='pointnet_sem_seg', help='model name [default: pointnet_sem_seg]')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 16]')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch Size during training [default: 16]')
     parser.add_argument('--epoch', default=32, type=int, help='Epoch to run [default: 32]')
     parser.add_argument('--learning_rate', default=0.001, type=float, help='Initial learning rate [default: 0.001]')
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use [default: GPU 0]')
@@ -88,22 +89,27 @@ def main(args):
     log_string('PARAMETER ...')
     log_string(args)
 
-    root = 'data/stanford_indoor3d/'
-    NUM_CLASSES = 13
+    root = Path('data/high_res_dataset/')
+    root.absolute()
+    NUM_CLASSES = numb_of_classes
     NUM_POINT = args.npoint
     BATCH_SIZE = args.batch_size
 
     print("start loading training data ...")
-    TRAIN_DATASET = S3DISDataset(split='train', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    TRAIN_DATASET = HierarchicalPointCloudDataset(str(root), transform=None, split='train')
     print("start loading test data ...")
-    TEST_DATASET = S3DISDataset(split='test', data_root=root, num_point=NUM_POINT, test_area=args.test_area, block_size=1.0, sample_rate=1.0, transform=None)
+    TEST_DATASET = HierarchicalPointCloudDataset(str(root), transform=None, split='test')
+
+    
+    
 
     trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=BATCH_SIZE, shuffle=True, num_workers=10,
                                                   pin_memory=True, drop_last=True,
                                                   worker_init_fn=lambda x: np.random.seed(x + int(time.time())))
     testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=BATCH_SIZE, shuffle=False, num_workers=10,
                                                  pin_memory=True, drop_last=True)
-    weights = torch.Tensor(TRAIN_DATASET.labelweights).cuda()
+    # weights = torch.Tensor(TRAIN_DATASET.labelweights).cuda()
+    weights = None
 
     log_string("The number of training data is: %d" % len(TRAIN_DATASET))
     log_string("The number of test data is: %d" % len(TEST_DATASET))
@@ -255,12 +261,12 @@ def main(args):
                     total_iou_deno_class[l] += np.sum(((pred_val == l) | (batch_label == l)))
 
             labelweights = labelweights.astype(np.float32) / np.sum(labelweights.astype(np.float32))
-            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float) + 1e-6))
+            mIoU = np.mean(np.array(total_correct_class) / (np.array(total_iou_deno_class, dtype=np.float64) + 1e-6))
             log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
             log_string('eval point avg class IoU: %f' % (mIoU))
             log_string('eval point accuracy: %f' % (total_correct / float(total_seen)))
             log_string('eval point avg class acc: %f' % (
-                np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float) + 1e-6))))
+                np.mean(np.array(total_correct_class) / (np.array(total_seen_class, dtype=np.float64) + 1e-6))))
 
             iou_per_class_str = '------- IoU --------\n'
             for l in range(NUM_CLASSES):
