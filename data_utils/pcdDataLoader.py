@@ -36,12 +36,13 @@ class HierarchicalPointCloudDataset(Dataset):
     def __preproc__(self, pcd_path):
         pcd = o3d.io.read_point_cloud(pcd_path)
         points = np.asarray(pcd.points, dtype=np.float32)
-        num_points=5000
+        num_points=50000
         N, D = points.shape
         if N >= num_points:
             idx = np.random.choice(N, num_points, replace=False)
             return points[idx]
         else:
+            raise IOError("Pointcloud to small")
             pad = np.zeros((num_points - N, D), dtype=points.dtype)
             return np.concatenate([points, pad], axis=0)
 
