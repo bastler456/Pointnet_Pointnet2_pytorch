@@ -76,7 +76,6 @@ def main(args):
     points_np = np.asarray(pcd.points)
 
     points = torch.tensor(points_np, dtype=torch.float32).unsqueeze(0).to(device)  # shape (1, N, 3)
-    points = points.permute(0, 2, 1)
 
     '''MODEL LOADING'''
     model_name = 'pointnet_sem_seg'
@@ -96,7 +95,18 @@ def main(args):
                 ], dtype=np.uint8)
     
         # Chunking parameters
-    chunk_size = 10  # number of points per chunk
+    points_in_scene = points_np.shape[0]  # total number of points
+    max_batch_size = 100000
+
+    # Calculate number of full chunks
+    num_full_chunks = points_in_scene // max_batch_size
+    remainder = points_in_scene % max_batch_size
+
+    # Total number of chunks
+    total_chunks = num_full_chunks + (1 if remainder > 0 else 0)
+
+    
+    chunk_size = points_in_scene // total_chunks  # number of points per chunk
     outputs = []
 
     # Process in chunks
@@ -111,28 +121,29 @@ def main(args):
 
         # Run through model
         with torch.no_grad():  # avoid storing gradients if you're just inferring
-            output = model(points)  # shape: (1, 64, chunk_size)
+            output = model(chunk_tensor)  # shape: (1, 64, chunk_size)
         
-        outputs.append(output.cpu())  # move to CPU and store
+        outputs.append(output[0].cpu())  # move to CPU and store
 
     # Concatenate all outputs
-    final_output = torch.cat(outputs, dim=2)  # shape: (1, 64, total_points)
+    final_output = torch.cat(outputs[:-1], dim=2)  # shape: (1, 64, total_points)
 
     print(f"Final output shape: {final_output.shape}")
 
-    with torch.no_grad():
-        preds = model(points)
-        pred_labels = torch.argmax(preds, dim=-1).squeeze().cpu().numpy()
+    preds = final_output.permute(0, 2, 1)      # (1, N, C)
+    pred_labels = torch.argmax(preds, dim=-1).squeeze(0).cpu().numpy()  # (N,)
 
-        pred_labels_np = pred_labels.cpu().numpy().squeeze()  # shape: (N,)
-        points_np = points.cpu().numpy().squeeze()            # shape: (N, 3)
-        colors = CLASS_COLORS[pred_labels_np % len(CLASS_COLORS)] / 255.0
+    # Trim points to match dropped predictions
+    points_np_trimmed = points_np[:len(pred_labels)]  # shape: (N, 3)
 
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points_np)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
+    # Map labels to colors
+    colors = CLASS_COLORS[pred_labels % len(CLASS_COLORS)] / 255.0
 
-        o3d.visualization.draw_geometries([pcd])
+    # Visualize
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points_np_trimmed)
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([pcd])
 
    
 
