@@ -22,7 +22,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-classes = ['scanned','box']
+classes = ['scanned', 'bottle', 'box']
 numb_of_classes: int = len(classes)
 class2label = {cls: i for i, cls in enumerate(classes)}
 seg_classes = class2label
