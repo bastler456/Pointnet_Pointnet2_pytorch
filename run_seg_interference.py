@@ -24,53 +24,15 @@ seg_label_to_cat = {}
 for i, cat in enumerate(seg_classes.keys()):
     seg_label_to_cat[i] = cat
 
-def parse_args():
-    '''PARAMETERS'''
-    parser = argparse.ArgumentParser('Model')
-    parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
-    parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
-    parser.add_argument('--num_point', type=int, default=50000, help='point number [default: 4096]')
-    parser.add_argument('--log_dir', type=str, default="", help='experiment root')
-    parser.add_argument('--visual', action='store_true', default=False, help='visualize result [default: False]')
-    parser.add_argument('--test_area', type=int, default=5, help='area for testing, option: 1-6 [default: 5]')
-    parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting [default: 5]')
-    return parser.parse_args()
 
-
-def add_vote(vote_label_pool, point_idx, pred_label, weight):
-    B = pred_label.shape[0]
-    N = pred_label.shape[1]
-    for b in range(B):
-        for n in range(N):
-            if weight[b, n] != 0 and not np.isinf(weight[b, n]):
-                vote_label_pool[int(point_idx[b, n]), int(pred_label[b, n])] += 1
-    return vote_label_pool
-
-
-def main(args):
-    def log_string(str):
-        logger.info(str)
-        print(str)
-
+def main():
     '''HYPER PARAMETER'''
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    '''LOG'''
-    args = parse_args()
-    logger = logging.getLogger("Model")
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler = logging.FileHandler('%s/eval.txt' % "log/sem_seg")
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    log_string('PARAMETER ...')
-    log_string(args)
 
     NUM_CLASSES = numb_of_classes
-    BATCH_SIZE = args.batch_size
-    NUM_POINT = args.num_point
+
 
     pcd = o3d.io.read_point_cloud("data/scene.pcd")
     points_np = np.asarray(pcd.points)
@@ -94,19 +56,13 @@ def main(args):
                     [0, 255, 255],  # Cyan
                 ], dtype=np.uint8)
     
-        # Chunking parameters
-    points_in_scene = points_np.shape[0]  # total number of points
+    # Chunking parameters
+    points_in_scene = points.shape
     max_batch_size = 100000
-
-    # Calculate number of full chunks
-    num_full_chunks = points_in_scene // max_batch_size
-    remainder = points_in_scene % max_batch_size
-
-    # Total number of chunks
+    num_full_chunks = int(points_in_scene[1] / max_batch_size)
+    remainder = points_in_scene[1] % max_batch_size
     total_chunks = num_full_chunks + (1 if remainder > 0 else 0)
-
-    
-    chunk_size = points_in_scene // total_chunks  # number of points per chunk
+    chunk_size = int(points_in_scene[1] / total_chunks)  # number of points per chunk
     outputs = []
 
     # Process in chunks
@@ -122,6 +78,7 @@ def main(args):
         # Run through model
         with torch.no_grad():  # avoid storing gradients if you're just inferring
             output = model(chunk_tensor)  # shape: (1, 64, chunk_size)
+            print(f"Output tensor shape: {output.shape}")
         
         outputs.append(output[0].cpu())  # move to CPU and store
 
@@ -150,5 +107,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    main()
