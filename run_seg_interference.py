@@ -34,7 +34,7 @@ def main():
     NUM_CLASSES = numb_of_classes
 
 
-    pcd = o3d.io.read_point_cloud("data/scene.pcd")
+    pcd = o3d.io.read_point_cloud("data/scene2.pcd")
     o3d.visualization.draw_geometries([pcd])
     points_np = np.asarray(pcd.points)
 
@@ -44,7 +44,8 @@ def main():
     model_name = 'pointnet_sem_seg'
     MODEL = importlib.import_module(f'models.{model_name}')
     model = MODEL.get_model(NUM_CLASSES).to(device)
-    checkpoint = torch.load("best_model.pth", weights_only=False)
+    checkpoint = torch.load("log/sem_seg/2025-05-08_16-27/checkpoints/best_model.pth", weights_only=False)
+    # checkpoint = torch.load("best_model.pth", weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 

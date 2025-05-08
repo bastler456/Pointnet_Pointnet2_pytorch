@@ -6,7 +6,7 @@ import numpy as np
 
 
 class HierarchicalPointCloudDataset(Dataset):
-    def __init__(self, root_dir, split='train', transform=None):
+    def __init__(self, root_dir, num_points, split='train', transform=None):
         """
         Args:
             root_dir (str): Root directory with class folders.
@@ -17,6 +17,7 @@ class HierarchicalPointCloudDataset(Dataset):
         self.split = split
         self.transform = transform
         self.data_paths = []
+        self.num_points = num_points
 
         for class_name in os.listdir(root_dir):
             class_path = os.path.join(root_dir, class_name, split)
@@ -36,10 +37,10 @@ class HierarchicalPointCloudDataset(Dataset):
     def __preproc__(self, pcd_path):
         pcd = o3d.io.read_point_cloud(pcd_path)
         points = np.asarray(pcd.points, dtype=np.float32)
-        num_points=10000
+        points / np.max(np.linalg.norm(points, axis=1))
         N, D = points.shape
-        if N >= num_points:
-            idx = np.random.choice(N, num_points, replace=False)
+        if N >= self.num_points:
+            idx = np.random.choice(N, self.num_points, replace=False)
             return points[idx]
         else:
             raise IOError("Pointcloud to small")
