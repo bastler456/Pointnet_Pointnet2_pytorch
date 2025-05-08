@@ -35,6 +35,7 @@ def main():
 
 
     pcd = o3d.io.read_point_cloud("data/scene.pcd")
+    o3d.visualization.draw_geometries([pcd])
     points_np = np.asarray(pcd.points)
 
     points = torch.tensor(points_np, dtype=torch.float32).unsqueeze(0).to(device)  # shape (1, N, 3)
@@ -42,7 +43,7 @@ def main():
     '''MODEL LOADING'''
     model_name = 'pointnet_sem_seg'
     MODEL = importlib.import_module(f'models.{model_name}')
-    model = MODEL.get_model(NUM_CLASSES).cuda()
+    model = MODEL.get_model(NUM_CLASSES).to(device)
     checkpoint = torch.load("best_model.pth", weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
@@ -67,6 +68,7 @@ def main():
 
     # Process in chunks
     for i in range(0, points_np.shape[0], chunk_size):
+        print(f"run {i}")
         chunk = points_np[i:i+chunk_size]  # shape: (chunk_size, 3)
         
         if chunk.shape[0] == 0:
@@ -77,18 +79,18 @@ def main():
 
         # Run through model
         with torch.no_grad():  # avoid storing gradients if you're just inferring
-            output = model(chunk_tensor)  # shape: (1, 64, chunk_size)
+            output = model(chunk_tensor)[0]
             print(f"Output tensor shape: {output.shape}")
         
-        outputs.append(output[0].cpu())  # move to CPU and store
+        outputs.append(output.cpu())  # move to CPU and store
 
     # Concatenate all outputs
-    final_output = torch.cat(outputs[:-1], dim=2)  # shape: (1, 64, total_points)
+    final_output = torch.cat(outputs[:-1], dim=1) 
 
     print(f"Final output shape: {final_output.shape}")
 
-    preds = final_output.permute(0, 2, 1)      # (1, N, C)
-    pred_labels = torch.argmax(preds, dim=-1).squeeze(0).cpu().numpy()  # (N,)
+    # preds = final_output.permute(0, 2, 1)      # (1, N, C)
+    pred_labels = torch.argmax(final_output, dim=-1).squeeze(0).cpu().numpy()  # (N,)
 
     # Trim points to match dropped predictions
     points_np_trimmed = points_np[:len(pred_labels)]  # shape: (N, 3)

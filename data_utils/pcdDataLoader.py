@@ -43,8 +43,6 @@ class HierarchicalPointCloudDataset(Dataset):
             return points[idx]
         else:
             raise IOError("Pointcloud to small")
-            pad = np.zeros((num_points - N, D), dtype=points.dtype)
-            return np.concatenate([points, pad], axis=0)
 
 
     def __getitem__(self, idx):
