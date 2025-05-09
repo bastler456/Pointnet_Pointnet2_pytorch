@@ -41,10 +41,10 @@ def main():
     points = torch.tensor(points_np, dtype=torch.float32).unsqueeze(0).to(device)  # shape (1, N, 3)
 
     '''MODEL LOADING'''
-    model_name = 'pointnet_sem_seg'
+    model_name = 'pointnet2_sem_seg'
     MODEL = importlib.import_module(f'models.{model_name}')
     model = MODEL.get_model(NUM_CLASSES).to(device)
-    checkpoint = torch.load("log/sem_seg/2025-05-08_16-27/checkpoints/best_model.pth", weights_only=False)
+    checkpoint = torch.load("log/sem_seg/2025-05-09_21-20/checkpoints/best_model.pth", weights_only=False)
     # checkpoint = torch.load("best_model.pth", weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
